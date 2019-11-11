@@ -1,0 +1,56 @@
+function visualizeReprojection(mergedGraph, frames)
+
+	nCam = length(mergedGraph.frames);
+	Mot = zeros(3,2,nCam);
+	for camera=1:nCam
+	    Mot(:,1,camera) = RotationMatrix2AngleAxis(mergedGraph.Mot(:,1:3,camera));
+	    Mot(:,2,camera) = mergedGraph.Mot(:,4,camera);
+    end
+    
+    Str = mergedGraph.Str;
+	ObsIdx = mergedGraph.ObsIdx;
+	ObsVal = mergedGraph.ObsVal;
+	K = mergedGraph.K;
+
+	for c = 1 : nCam
+		image_c = im2double(imresize(imread(frames.images{c}),frames.imsize(1:2)));
+
+	    inliers = ObsIdx(c,:) ~= 0;
+	    outliers = ObsIdx(c,:) == 0;
+	    inlierIdx = ObsIdx(c,inliers);
+        
+        imOffset = size(image_c);
+        imOffset = [imOffset(2) imOffset(1) imOffset(3)]' / 2;
+	    
+	    rotated_pts_in = AngleAxisRotatePts(Mot(:,1,c), Str(:,inliers));
+        pts_in = K * (rotated_pts_in + Mot(:, 2, c));
+        pts_in = pts_in ./ pts_in(3, :);
+        pts_in = -pts_in + imOffset;
+        
+        reproj_in = ObsVal(:,inlierIdx);
+		reproj_in = -reproj_in + imOffset(1:2);
+
+	    rotated_pts_out = AngleAxisRotatePts(Mot(:,1,c), Str(:,outliers));
+        pts_out = K * (rotated_pts_out + Mot(:, 2, c));
+        pts_out = pts_out ./ pts_out(3, :);
+        pts_out = -pts_out + imOffset;
+        
+		figure;
+        imshow(image_c);
+        hold on;
+		plot(pts_in(1,:), pts_in(2,:), 'o', 'Color', 'g', 'MarkerSize', 5, 'Marker', '+');
+        plot(reproj_in(1,:), reproj_in(2,:), 'o', 'Color', 'r', 'MarkerSize', 5, 'Marker', 'x');
+		plot(pts_out(1,:), pts_out(2,:), 'o', 'Color', 'y', 'MarkerSize', 5);
+		
+        
+        % Draw lines connecting points and reprojections
+		for i = 1:size(pts_in, 2)
+            plot([pts_in(1,i) ; reproj_in(1,i)], [pts_in(2,i) ; reproj_in(2,i)], 'Color', 'b', 'Marker', 'None');
+		end
+
+		hold off
+        savefile = sprintf('reprojections_head_%d.jpg',c);
+        saveas(gcf, savefile)
+        drawnow;
+    end
+end
